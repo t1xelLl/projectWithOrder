@@ -1,0 +1,16 @@
+http:
+  port: "8000"
+
+postgres:
+    host: "localhost"
+    port: "5433"
+    username: "postgres"
+    password: "root"
+    database: "postgres"
+    sslmode: "disable"
+
+kafka:
+  brokers:
+    - "localhost:9092"
+  topic: "orders"
+  group_id: "order-service"
