@@ -9,6 +9,8 @@ type (
 	Config struct {
 		Postgres `yaml:"postgres"`
 		Http     `yaml:"http"`
+		Redis    `yaml:"redis"`
+		Kafka    `yaml:"kafka"`
 	}
 
 	Http struct {
@@ -29,6 +31,13 @@ type (
 		Topic   string   `yaml:"topic"`
 		GroupID string   `yaml:"group_id"`
 	}
+
+	Redis struct {
+		Host     string `yaml:"host"`
+		Port     string `yaml:"port"`
+		Password string `yaml:"password" env:"REDIS_PASSWORD"`
+		DB       int    `yaml:"db"`
+	}
 )
 
 func LoadConfig(path string) (Config, error) {
@@ -45,6 +54,9 @@ func LoadConfig(path string) (Config, error) {
 	}
 	if password := os.Getenv("DB_PASSWORD"); password != "" {
 		config.Postgres.Password = password
+	}
+	if password := os.Getenv("REDIS_PASSWORD"); password != "" {
+		config.Redis.Password = password
 	}
 
 	return config, nil

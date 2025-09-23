@@ -9,13 +9,15 @@ import (
 
 // TODO: CHANGE
 func (h *Handler) GetOrderByUID(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	orderUID := c.Param("order_uid")
 	if orderUID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "order_uid is required"})
 		return
 	}
 
-	order, err := h.services.GetOrderByUID(orderUID)
+	order, err := h.services.GetOrderByUID(ctx, orderUID)
 	if err != nil {
 		logrus.Errorf("get order by uid %s error: %v", orderUID, err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order Not Found"})
@@ -26,6 +28,8 @@ func (h *Handler) GetOrderByUID(c *gin.Context) {
 }
 
 func (h *Handler) CreateOrder(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	var order entities.Order
 
 	if err := c.BindJSON(&order); err != nil {
@@ -39,7 +43,7 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 		return
 	}
 
-	if err := h.services.Order.CreateOrder(order); err != nil {
+	if err := h.services.Order.CreateOrder(ctx, &order); err != nil {
 		logrus.Errorf("Failed to create order %s: %v", order.OrderUID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create order"})
 		return

@@ -1,11 +1,16 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	"github.com/sirupsen/logrus"
 	"github.com/t1xelLl/projectWithOrder/internal/entities"
+	"time"
 )
+
+const operationTimeout = 10 * time.Second
 
 type OrderPostgres struct {
 	db *sqlx.DB
@@ -15,8 +20,12 @@ func NewOrderPostgres(db *sqlx.DB) *OrderPostgres {
 	return &OrderPostgres{db: db}
 }
 
-// TODO: CHANGE
-func (r *OrderPostgres) GetOrderByUID(uid string) (entities.Order, error) {
+// TODO: add context
+
+func (r *OrderPostgres) GetOrderByUID(ctx context.Context, uid string) (*entities.Order, error) {
+	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
+
 	var order entities.Order
 
 	query := `
@@ -28,12 +37,13 @@ func (r *OrderPostgres) GetOrderByUID(uid string) (entities.Order, error) {
 		WHERE order_uid = $1
 	`
 
-	err := r.db.Get(&order, query, uid)
+	err := r.db.GetContext(ctx, &order, query, uid)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return entities.Order{}, fmt.Errorf("order not found")
+
+			return nil, fmt.Errorf("order not found")
 		}
-		return entities.Order{}, fmt.Errorf("failed to get order : %w", err)
+		return nil, fmt.Errorf("failed to get order : %w", err)
 	}
 
 	deliveryQuery := `
@@ -41,9 +51,9 @@ func (r *OrderPostgres) GetOrderByUID(uid string) (entities.Order, error) {
 		FROM delivery 
 		WHERE order_uid = $1
 	`
-	err = r.db.Get(&order.Delivery, deliveryQuery, uid)
+	err = r.db.GetContext(ctx, &order.Delivery, deliveryQuery, uid)
 	if err != nil {
-		return entities.Order{}, fmt.Errorf("failed to get delivery info: %w", err)
+		return nil, fmt.Errorf("failed to get delivery info: %w", err)
 	}
 
 	paymentQuery := `
@@ -52,9 +62,9 @@ func (r *OrderPostgres) GetOrderByUID(uid string) (entities.Order, error) {
 		FROM payment 
 		WHERE order_uid = $1
 	`
-	err = r.db.Get(&order.Payment, paymentQuery, uid)
+	err = r.db.GetContext(ctx, &order.Payment, paymentQuery, uid)
 	if err != nil {
-		return entities.Order{}, fmt.Errorf("failed to get payment info: %w", err)
+		return nil, fmt.Errorf("failed to get payment info: %w", err)
 	}
 
 	itemsQuery := `
@@ -63,24 +73,33 @@ func (r *OrderPostgres) GetOrderByUID(uid string) (entities.Order, error) {
 		FROM item 
 		WHERE order_uid = $1
 	`
-	err = r.db.Select(&order.Items, itemsQuery, uid)
+	err = r.db.SelectContext(ctx, &order.Items, itemsQuery, uid)
 	if err != nil {
-		return entities.Order{}, fmt.Errorf("failed to get items: %w", err)
+		return nil, fmt.Errorf("failed to get items: %w", err)
 	}
 
-	return order, nil
+	return &order, nil
 
 }
 
-func (r *OrderPostgres) CreateOrder(order entities.Order) error {
-	// Начинаем транзакцию
-	tx, err := r.db.Beginx()
+// TODO: add context
+
+func (r *OrderPostgres) CreateOrder(ctx context.Context, order *entities.Order) error {
+	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
+
+	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback() // Откатываем в случае ошибки
+	defer func() {
+		if err != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				logrus.Errorf("failed to rollback transaction: %v", rbErr)
+			}
+		}
+	}()
 
-	// Вставляем основную информацию о заказе
 	orderQuery := `
 		INSERT INTO "order" (
 			order_uid, track_number, entry, locale, 
@@ -88,7 +107,7 @@ func (r *OrderPostgres) CreateOrder(order entities.Order) error {
 			shardkey, sm_id, date_created, oof_shard
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
-	_, err = tx.Exec(orderQuery,
+	_, err = tx.ExecContext(ctx, orderQuery,
 		order.OrderUID,
 		order.TrackNumber,
 		order.Entry,
@@ -105,13 +124,12 @@ func (r *OrderPostgres) CreateOrder(order entities.Order) error {
 		return fmt.Errorf("failed to insert order: %w", err)
 	}
 
-	// Вставляем информацию о доставке
 	deliveryQuery := `
 		INSERT INTO delivery (
 			order_uid, name, phone, zip, city, address, region, email
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
-	_, err = tx.Exec(deliveryQuery,
+	_, err = tx.ExecContext(ctx, deliveryQuery,
 		order.OrderUID,
 		order.Delivery.Name,
 		order.Delivery.Phone,
@@ -125,14 +143,13 @@ func (r *OrderPostgres) CreateOrder(order entities.Order) error {
 		return fmt.Errorf("failed to insert delivery: %w", err)
 	}
 
-	// Вставляем информацию о платеже
 	paymentQuery := `
 		INSERT INTO payment (
 			order_uid, transaction, request_id, currency, provider, 
 			amount, payment_dt, bank, delivery_cost, goods_total, custom_fee
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
-	_, err = tx.Exec(paymentQuery,
+	_, err = tx.ExecContext(ctx, paymentQuery,
 		order.OrderUID,
 		order.Payment.Transaction,
 		order.Payment.RequestID,
@@ -149,7 +166,6 @@ func (r *OrderPostgres) CreateOrder(order entities.Order) error {
 		return fmt.Errorf("failed to insert payment: %w", err)
 	}
 
-	// Вставляем товары
 	itemQuery := `
 		INSERT INTO item (
 			order_uid, chrt_id, track_number, price, rid, name, 
@@ -157,7 +173,7 @@ func (r *OrderPostgres) CreateOrder(order entities.Order) error {
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
 	for _, item := range order.Items {
-		_, err = tx.Exec(itemQuery,
+		_, err = tx.ExecContext(ctx, itemQuery,
 			order.OrderUID,
 			item.ChrtID,
 			item.TrackNumber,
@@ -176,10 +192,54 @@ func (r *OrderPostgres) CreateOrder(order entities.Order) error {
 		}
 	}
 
-	// Коммитим транзакцию
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
+}
+
+// TODO: add context
+
+func (r *OrderPostgres) GetAllOrders(ctx context.Context) ([]*entities.Order, error) {
+	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
+
+	var orderUIDs []string
+	query := `SELECT order_uid FROM "order" ORDER BY date_created DESC LIMIT 1000`
+
+	err := r.db.SelectContext(ctx, &orderUIDs, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get order uids: %w", err)
+	}
+
+	orders := make([]*entities.Order, 0, len(orderUIDs))
+	for _, uid := range orderUIDs {
+		order, err := r.GetOrderByUID(ctx, uid)
+		if err != nil {
+			logrus.Warnf("failed to get order %s: %v", uid, err)
+			continue
+		}
+		orders = append(orders, order)
+	}
+
+	if len(orders) == 0 {
+		return nil, fmt.Errorf("no orders found")
+	}
+
+	return orders, nil
+}
+
+func (r *OrderPostgres) OrderExist(ctx context.Context, uid string) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
+
+	var exist bool
+	query := `SELECT EXISTS (SELECT 1 FROM "order" WHERE order_uid = $1)`
+
+	err := r.db.GetContext(ctx, &exist, query, uid)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if order exists: %w", err)
+	}
+	return exist, nil
 }
