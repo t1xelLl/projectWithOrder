@@ -1,0 +1,165 @@
+<!-- web/index.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <title>Поиск заказа</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(-45deg, #E313BF, #500661, #8A2BE2, #FF1493);
+            background-size: 400% 400%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+            animation: gradientShift 8s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+            text-align: center;
+            width: 380px;
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+        }
+        h1 {
+            margin-bottom: 25px;
+            font-size: 26px;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+            letter-spacing: 0.5px;
+        }
+        input {
+            width: calc(100% - 24px);
+            padding: 12px;
+            margin: 0 auto 20px auto;
+            display: block;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+            box-shadow: inset 0 0 8px rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.25);
+            color: #fff;
+            transition: all 0.3s ease;
+        }
+        input::placeholder {
+            color: rgba(255,255,255,0.7);
+        }
+        input:focus {
+            background: rgba(255,255,255,0.35);
+            box-shadow: 0 0 12px #d89cf7, inset 0 0 8px rgba(255,255,255,0.3);
+            transform: scale(1.02);
+        }
+
+        button {
+            background: linear-gradient(to right, #ffffff, #f0e6ff);
+            color: #530863;
+            padding: 12px 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            width: 100%;
+            font-weight: 600;
+            box-shadow: 0 6px 12px rgba(83, 8, 99, 0.5);
+            transition: all 0.3s ease;
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+        }
+        button:hover {
+            background: linear-gradient(to right, #f9f9f9, #e8d9ff);
+            color: #3d064a;
+            box-shadow: 0 8px 16px rgba(169, 4, 207, 0.7);
+            transform: translateY(-2px);
+        }
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 8px rgba(83, 8, 99, 0.5);
+        }
+        pre {
+            text-align: left;
+            background: rgba(0,0,0,0.3);
+            padding: 18px;
+            border-radius: 8px;
+            max-height: 220px;
+            overflow-y: auto;
+            font-size: 13px;
+            color: #f0f0f0;
+            margin-top: 20px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            white-space: pre-wrap;
+            word-break: break-word;
+            border: 1px solid rgba(255,255,255,0.1);
+            line-height: 1.4;
+        }
+        pre.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>🔍 Поиск заказа</h1>
+    <input type="text" id="orderId" placeholder="Введите Order UID" />
+    <button onclick="getOrder()">Найти заказ</button>
+    <pre id="result"></pre>
+</div>
+
+<script>
+    async function getOrder() {
+        const resultEl = document.getElementById('result');
+        const id = document.getElementById('orderId').value.trim();
+        if (!id) {
+            resultEl.textContent = "⚠️ Введите Order UID";
+            resultEl.classList.add('visible');
+            return;
+        }
+        try {
+            resultEl.textContent = "⏳ Загрузка...";
+            resultEl.classList.add('visible');
+            const response = await fetch(`http://localhost:8080/order/${id}`);
+            if (!response.ok) {
+                let errorText;
+                try {
+                    const errorData = await response.json();
+                    errorText = errorData.message || JSON.stringify(errorData);
+                } catch {
+                    errorText = await response.text();
+                }
+                throw new Error(errorText || `HTTP ошибка ${response.status}`);
+            }
+            const data = await response.json();
+            resultEl.textContent = JSON.stringify(data, null, 2);
+        } catch (err) {
+            resultEl.textContent = err.message;
+            resultEl.classList.add('visible');
+        }
+    }
+</script>
+</body>
+</html>

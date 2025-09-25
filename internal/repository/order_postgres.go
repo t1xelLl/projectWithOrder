@@ -20,8 +20,6 @@ func NewOrderPostgres(db *sqlx.DB) *OrderPostgres {
 	return &OrderPostgres{db: db}
 }
 
-// TODO: add context
-
 func (r *OrderPostgres) GetOrderByUID(ctx context.Context, uid string) (*entities.Order, error) {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
@@ -81,8 +79,6 @@ func (r *OrderPostgres) GetOrderByUID(ctx context.Context, uid string) (*entitie
 	return &order, nil
 
 }
-
-// TODO: add context
 
 func (r *OrderPostgres) CreateOrder(ctx context.Context, order *entities.Order) error {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
@@ -198,8 +194,6 @@ func (r *OrderPostgres) CreateOrder(ctx context.Context, order *entities.Order) 
 
 	return nil
 }
-
-// TODO: add context
 
 func (r *OrderPostgres) GetAllOrders(ctx context.Context) ([]*entities.Order, error) {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)

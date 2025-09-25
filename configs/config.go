@@ -27,9 +27,10 @@ type (
 	}
 
 	Kafka struct {
-		Brokers []string `yaml:"brokers"`
-		Topic   string   `yaml:"topic"`
-		GroupID string   `yaml:"group_id"`
+		Host    string `yaml:"host"`
+		Port    string `yaml:"port"`
+		Topic   string `yaml:"topic"`
+		GroupID string `yaml:"group_id"`
 	}
 
 	Redis struct {

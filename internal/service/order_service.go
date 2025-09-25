@@ -21,11 +21,10 @@ func NewOrderService(orderRepo repository.Order, cache cache.Cache) *OrderServic
 	return &OrderService{orderRepo: orderRepo, cache: cache}
 }
 
-// TODO: CHANGE
 func (s *OrderService) GetOrderByUID(ctx context.Context, uid string) (*entities.Order, error) {
 	cachedOrder, err := s.cache.GetData(ctx, uid)
 	if err != nil && err != redis.Nil {
-		return nil, fmt.Errorf("get from cache: %w", err)
+		logrus.Warnf("Failed to get order from cache: %v", err)
 	}
 
 	if cachedOrder != nil {
@@ -54,8 +53,10 @@ func (s *OrderService) GetOrderByUID(ctx context.Context, uid string) (*entities
 			return
 		}
 
-		if err := s.cache.SetData(cacheCtx, uid, data); err != nil {
-			logrus.Warnf("failed to cache order %q: %v", uid, err)
+		if err := s.cache.SetData(cacheCtx, order.OrderUID, data); err != nil {
+			logrus.Warnf("failed to cache order %q: %v", order.OrderUID, err)
+		} else {
+			logrus.Debugf("successfully cached order %q", order.OrderUID)
 		}
 	}(order, uid)
 

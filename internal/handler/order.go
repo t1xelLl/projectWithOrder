@@ -7,7 +7,6 @@ import (
 	"net/http"
 )
 
-// TODO: CHANGE
 func (h *Handler) GetOrderByUID(c *gin.Context) {
 	ctx := c.Request.Context()
 

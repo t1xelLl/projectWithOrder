@@ -1,5 +1,5 @@
 http:
-  port: "8000"
+  port: "8080"
 
 postgres:
     host: "localhost"
@@ -10,10 +10,10 @@ postgres:
     sslmode: "disable"
 
 kafka:
-  brokers:
-    - "localhost:9092"
+  port: "9092"
+  host: "localhost"
   topic: "orders"
-  group_id: "order-service"
+  group_id: "order-consumer"
 
 redis:
   host: "localhost"
